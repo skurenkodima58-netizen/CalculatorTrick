@@ -47,6 +47,33 @@ private func fmt(_ n: Double) -> String {
 private func displayString(_ raw: String) -> String { raw.replacingOccurrences(of: ".", with: ",") }
 private func toNum(_ s: String) -> Double { Double(s.replacingOccurrences(of: ",", with: ".")) ?? 0 }
 
+/// Small calculator glyph matching the real Calculator app's top-right toggle icon.
+struct MiniCalculatorIcon: View {
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            ZStack {
+                RoundedRectangle(cornerRadius: w * 0.14)
+                    .stroke(Color.white, lineWidth: w * 0.09)
+                RoundedRectangle(cornerRadius: w * 0.06)
+                    .fill(Color.white)
+                    .frame(width: w * 0.58, height: h * 0.2)
+                    .offset(y: -h * 0.22)
+                VStack(spacing: h * 0.1) {
+                    ForEach(0..<2, id: \.self) { _ in
+                        HStack(spacing: w * 0.1) {
+                            ForEach(0..<3, id: \.self) { _ in
+                                Circle().fill(Color.white).frame(width: w * 0.12, height: w * 0.12)
+                            }
+                        }
+                    }
+                }
+                .offset(y: h * 0.16)
+            }
+        }
+    }
+}
+
 // MARK: - ContentView
 
 struct ContentView: View {
@@ -96,7 +123,7 @@ struct ContentView: View {
                     HStack {
                         Image(systemName: "clock")
                         Spacer()
-                        Image(systemName: "square.grid.2x2")
+                        MiniCalculatorIcon().frame(width: 22, height: 22)
                     }
                     .font(.system(size: 20))
                     .foregroundColor(.white.opacity(0.9))
@@ -123,7 +150,7 @@ struct ContentView: View {
                             ForEach(Array(calcButtons.enumerated()), id: \.element.id) { index, model in
                                 crumbledButton(index: index, model: model)
                             }
-                        } else if !revealed {
+                        } else {
                             ForEach(calcButtons) { model in
                                 normalButton(model)
                             }
@@ -292,6 +319,7 @@ struct ContentView: View {
     // MARK: Calculator logic
 
     private func handleTap(_ model: CalcButtonModel) {
+        if revealed { return }
         if montageShown {
             if model.action == "digit" { montageShown = false; armed = false; display = model.label; waitingForOperand = false; return }
             if model.action == "ac" { montageShown = false; armed = false; clearAll(); return }
@@ -358,13 +386,14 @@ struct ContentView: View {
         withAnimation(.easeOut(duration: 0.2)) { crashed = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             let floor = playH - btnD, wallX = playW - btnD
+            let n = calcButtons.count
+            let laneW = n > 1 ? wallX / CGFloat(n - 1) : 0
+            let lanes = Array(0..<n).shuffled()
             bodies = calcButtons.enumerated().map { i, _ in
-                let col = CGFloat(i % 2), stack = CGFloat(i / 2)
-                return PhysicsBody(
-                    x: min(wallX, col * btnD * 0.5 + CGFloat.random(in: 0...6)),
-                    y: max(0, floor - stack * btnD * 0.42 - CGFloat.random(in: 0...6)),
-                    vx: 0, vy: 0
-                )
+                let lane = CGFloat(lanes[i])
+                let x = min(wallX, max(0, lane * laneW + CGFloat.random(in: -12...12)))
+                let y = max(0, floor - CGFloat.random(in: 0...(btnD * 1.3)))
+                return PhysicsBody(x: x, y: y, vx: 0, vy: 0)
             }
         }
     }
@@ -405,7 +434,6 @@ struct ContentView: View {
 
     private func revealTrick() {
         saveRevealScreenshot()
-        montageShown = false
         withAnimation(.easeInOut(duration: 0.4)) { pinchScale = 1.0; revealed = true }
     }
 
@@ -462,7 +490,7 @@ struct GalleryView: View {
                             Text("Медиатека").font(.system(size: 30, weight: .heavy))
                             HStack(spacing: 4) {
                                 Image(systemName: "icloud")
-                                Text("Хранилище заполнено")
+                                Text("Хранилище заполнено · Увеличить >")
                             }
                             .font(.system(size: 13))
                             .foregroundColor(Color(white: 0.55))

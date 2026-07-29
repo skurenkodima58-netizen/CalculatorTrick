@@ -22,7 +22,6 @@ jobs:
 
       - name: Build unsigned .app for iphoneos
         run: |
-          
           xcodebuild \
             -project CalculatorTrick.xcodeproj \
             -target CalculatorTrick \
@@ -37,7 +36,6 @@ jobs:
 
       - name: Package into .ipa (Payload/ layout)
         run: |
-          
           mkdir -p Payload
           cp -R "build/CalculatorTrick.app" Payload/
           zip -r CalculatorTrick-unsigned.ipa Payload
