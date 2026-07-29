@@ -79,7 +79,9 @@ struct MiniCalculatorIcon: View {
 struct ContentView: View {
     @StateObject private var motion = MotionManager()
 
-    @State private var display = "0"
+    @State private var display = "0"       // what's shown on screen (full expression, e.g. "23+63")
+    @State private var currentTerm = "0"    // the number currently being typed
+    @State private var committedPrefix = "" // everything already typed before currentTerm, e.g. "23+"
     @State private var prevValue: Double? = nil
     @State private var pendingOp: String? = nil
     @State private var waitingForOperand = false
@@ -321,32 +323,57 @@ struct ContentView: View {
     private func handleTap(_ model: CalcButtonModel) {
         if revealed { return }
         if montageShown {
-            if model.action == "digit" { montageShown = false; armed = false; display = model.label; waitingForOperand = false; return }
+            if model.action == "digit" {
+                montageShown = false; armed = false
+                currentTerm = model.label; committedPrefix = ""; display = currentTerm
+                waitingForOperand = false
+                return
+            }
             if model.action == "ac" { montageShown = false; armed = false; clearAll(); return }
         }
         switch model.action {
         case "ac": clearAll()
-        case "back": display = display.count > 1 ? String(display.dropLast()) : "0"
-        case "sign": display = fmt(-1 * toNum(display))
-        case "pct": display = fmt(toNum(display) / 100)
-        case "comma": if !display.contains(",") { display += "," }
+        case "back":
+            currentTerm = currentTerm.count > 1 ? String(currentTerm.dropLast()) : "0"
+            display = committedPrefix + displayString(currentTerm)
+        case "sign":
+            currentTerm = fmt(-1 * toNum(currentTerm))
+            display = committedPrefix + displayString(currentTerm)
+        case "pct":
+            currentTerm = fmt(toNum(currentTerm) / 100)
+            display = committedPrefix + displayString(currentTerm)
+        case "comma":
+            if !currentTerm.contains(",") { currentTerm += "," }
+            display = committedPrefix + currentTerm
         case "eq": handleEquals()
         case "op": chooseOp(model.label)
-        default:
-            if waitingForOperand { display = model.label; waitingForOperand = false }
-            else { display = display == "0" ? model.label : display + model.label }
+        default: inputDigit(model.label)
         }
     }
 
+    private func inputDigit(_ d: String) {
+        if waitingForOperand { currentTerm = d; waitingForOperand = false }
+        else { currentTerm = currentTerm == "0" ? d : currentTerm + d }
+        display = committedPrefix + displayString(currentTerm)
+    }
+
     private func clearAll() {
-        display = "0"; prevValue = nil; pendingOp = nil; waitingForOperand = false
+        display = "0"; currentTerm = "0"; committedPrefix = ""
+        prevValue = nil; pendingOp = nil; waitingForOperand = false
     }
     private func chooseOp(_ nextOp: String) {
-        let cur = toNum(display)
+        let cur = toNum(currentTerm)
         if let p = prevValue, let op = pendingOp, !waitingForOperand {
-            let r = compute(p, cur, op); display = fmt(r); prevValue = r
-        } else { prevValue = cur }
-        pendingOp = nextOp; waitingForOperand = true
+            let r = compute(p, cur, op)
+            prevValue = r
+            committedPrefix = displayString(fmt(r)) + nextOp
+        } else {
+            prevValue = cur
+            committedPrefix = displayString(currentTerm) + nextOp
+        }
+        pendingOp = nextOp
+        waitingForOperand = true
+        display = committedPrefix
     }
     private func compute(_ a: Double, _ b: Double, _ op: String) -> Double {
         switch op {
@@ -362,10 +389,14 @@ struct ContentView: View {
             armed = false
             withAnimation { montageShown = true }
             prevValue = nil; pendingOp = nil; waitingForOperand = true
+            committedPrefix = ""
             return
         }
         if let p = prevValue, let op = pendingOp {
-            display = fmt(compute(p, toNum(display), op))
+            let r = compute(p, toNum(currentTerm), op)
+            currentTerm = fmt(r)
+            display = displayString(currentTerm)
+            committedPrefix = ""
             prevValue = nil; pendingOp = nil; waitingForOperand = true
         }
     }
@@ -469,12 +500,55 @@ struct ContentView: View {
             galleryOpen = false; revealed = false; montageShown = false; armed = false
             pinchScale = 1.0; swipeOffset = 0; swipeScale = 1.0
         }
-        display = "0"; prevValue = nil; pendingOp = nil; waitingForOperand = false
+        display = "0"; currentTerm = "0"; committedPrefix = ""; prevValue = nil; pendingOp = nil; waitingForOperand = false
         phase = 0; numberHidden = false; crashed = false; bodies = []
     }
 }
 
 // MARK: - Fake gallery ("Медиатека") screen
+
+private let photoPalettes: [[Color]] = [
+    [Color(red: 0.56, green: 0.77, blue: 1.0), Color(red: 0.23, green: 0.48, blue: 0.84)],
+    [Color(red: 1.0, green: 0.82, blue: 0.58), Color(red: 0.82, green: 0.57, blue: 0.24)],
+    [Color(red: 0.66, green: 1.0, blue: 0.47), Color(red: 0.47, green: 1.0, blue: 0.84)],
+    [Color(red: 0.96, green: 0.83, blue: 0.4), Color(red: 0.99, green: 0.56, blue: 0.52)],
+    [Color(red: 0.52, green: 0.98, blue: 0.69), Color(red: 0.56, green: 0.83, blue: 0.96)],
+    [Color(red: 0.99, green: 0.8, blue: 0.56), Color(red: 0.84, green: 0.49, blue: 0.92)],
+    [Color(red: 0.63, green: 0.77, blue: 0.99), Color(red: 0.76, green: 0.91, blue: 0.98)],
+    [Color(red: 0.98, green: 0.76, blue: 0.92), Color(red: 0.65, green: 0.76, blue: 0.93)],
+    [Color(red: 0.98, green: 0.96, blue: 0.53), Color(red: 0.59, green: 0.9, blue: 0.63)],
+    [Color(red: 1.0, green: 0.93, blue: 0.82), Color(red: 0.99, green: 0.71, blue: 0.62)],
+    [Color(red: 0.54, green: 0.97, blue: 0.99), Color(red: 0.4, green: 0.65, blue: 1.0)],
+]
+
+/// A tiny scaled-down rendering of the calculator screen (with the МОНТАЖ text and
+/// button grid), used as the gallery thumbnail so it reads as a real screenshot.
+struct CalcThumbnail: View {
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .topTrailing) {
+                Color.black
+                Text("МОНТАЖ")
+                    .font(.system(size: geo.size.width * 0.09, weight: .heavy))
+                    .foregroundColor(.white)
+                    .padding(.top, geo.size.height * 0.16)
+                    .padding(.trailing, geo.size.width * 0.08)
+
+                ForEach(calcButtons) { m in
+                    let d = geo.size.width * 0.19
+                    let gap = geo.size.width * 0.035
+                    let x = geo.size.width * 0.06 + CGFloat(m.col) * (d + gap) + d / 2
+                    let y = geo.size.height * 0.42 + CGFloat(m.row) * (d + gap) + d / 2
+                    Circle()
+                        .fill(m.kind == .op ? Color.orange : (m.kind == .fn ? Color(white: 0.11) : Color(white: 0.22)))
+                        .frame(width: d, height: d)
+                        .position(x: x, y: y)
+                }
+            }
+        }
+        .clipped()
+    }
+}
 
 struct GalleryView: View {
     let onClose: () -> Void
@@ -482,30 +556,31 @@ struct GalleryView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .top) {
-                Color.black.ignoresSafeArea()
+                Color.white.ignoresSafeArea()
 
                 VStack(spacing: 0) {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Медиатека").font(.system(size: 30, weight: .heavy))
+                            Text("Медиатека").font(.system(size: 30, weight: .heavy)).foregroundColor(.black)
                             HStack(spacing: 4) {
                                 Image(systemName: "icloud")
                                 Text("Хранилище заполнено · Увеличить >")
                             }
                             .font(.system(size: 13))
-                            .foregroundColor(Color(white: 0.55))
+                            .foregroundColor(Color(white: 0.43))
                         }
                         Spacer()
                         HStack(spacing: 10) {
                             Image(systemName: "line.3.horizontal")
+                                .foregroundColor(.black)
                                 .frame(width: 36, height: 36)
-                                .background(Color(white: 0.11))
+                                .background(Color(white: 0.95))
                                 .clipShape(Circle())
                             Text("Выбрать")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.black)
+                                .foregroundColor(Color(red: 0, green: 0.48, blue: 1))
                                 .padding(.horizontal, 14).padding(.vertical, 7)
-                                .background(Color(white: 0.78))
+                                .background(Color(white: 0.95))
                                 .clipShape(Capsule())
                         }
                     }
@@ -517,17 +592,12 @@ struct GalleryView: View {
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 1.5), count: 4), spacing: 1.5) {
                             ForEach(0..<28) { i in
                                 if i == 0 {
-                                    ZStack {
-                                        Color.black
-                                        Text("МОНТАЖ")
-                                            .font(.system(size: 11, weight: .heavy))
-                                            .foregroundColor(.white)
-                                    }
-                                    .aspectRatio(1, contentMode: .fill)
-                                    .overlay(Rectangle().stroke(Color(white: 0.2), lineWidth: 1))
-                                    .onTapGesture { onClose() }
+                                    CalcThumbnail()
+                                        .aspectRatio(1, contentMode: .fill)
+                                        .onTapGesture { onClose() }
                                 } else {
-                                    Color(white: 0.17)
+                                    let pair = photoPalettes[i % photoPalettes.count]
+                                    LinearGradient(colors: pair, startPoint: .topLeading, endPoint: .bottomTrailing)
                                         .aspectRatio(1, contentMode: .fill)
                                         .onTapGesture { onClose() }
                                 }
@@ -542,8 +612,9 @@ struct GalleryView: View {
                     HStack {
                         Spacer()
                         Image(systemName: "magnifyingglass")
+                            .foregroundColor(.black)
                             .frame(width: 46, height: 46)
-                            .background(Color(white: 0.11))
+                            .background(Color(white: 0.95))
                             .clipShape(Circle())
                             .padding(.trailing, 18)
                             .padding(.bottom, geo.safeAreaInsets.bottom + 68)
@@ -569,7 +640,11 @@ struct GalleryView: View {
                     }
                     .padding(.top, 8)
                     .padding(.bottom, geo.safeAreaInsets.bottom + 10)
-                    .background(Color(white: 0.08).opacity(0.95).ignoresSafeArea())
+                    .background(
+                        Color(white: 0.97).opacity(0.95)
+                            .overlay(Rectangle().frame(height: 0.5).foregroundColor(Color(white: 0.8)), alignment: .top)
+                            .ignoresSafeArea()
+                    )
                 }
             }
         }
